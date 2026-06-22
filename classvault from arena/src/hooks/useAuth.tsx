@@ -40,15 +40,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listen to auth changes
     const { unsubscribe } = dbAPI.onAuthStateChange((newSession) => {
-      // setTimeout to avoid React state update warnings during renders
       setTimeout(() => {
         setSession(newSession);
         setLoading(false);
       }, 0);
     });
 
+    // ⭐ Listen for database updates to refresh session
+    const handleDbUpdate = () => {
+      const active = dbAPI.getSession();
+      setSession(active);
+    };
+    
+    window.addEventListener("classvault-db-update", handleDbUpdate);
+
     return () => {
       unsubscribe();
+      window.removeEventListener("classvault-db-update", handleDbUpdate);
     };
   }, []);
 
