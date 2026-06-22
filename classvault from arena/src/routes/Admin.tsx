@@ -93,7 +93,7 @@ export const Admin: React.FC = () => {
   const [createPermissions, setCreatePermissions] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     ALL_PERMISSION_KEYS.forEach(key => {
-      initial[key] = true; // Default all to true so they start fully enabled
+      initial[key] = true;
     });
     return initial;
   });
@@ -135,7 +135,7 @@ export const Admin: React.FC = () => {
     return myPermissions[key] === true;
   };
 
-  // Fetch all admin data
+  // ⭐ FIXED: loadAdminData with proper state updates
   const loadAdminData = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     else setIsRefreshing(true);
@@ -182,13 +182,14 @@ export const Admin: React.FC = () => {
         permissionsData = dbAPI.getAdminPermissions();
       }
 
-      setProfiles(pData);
-      setMessages(mData);
-      setReports(rData);
-      setRequests(reqData);
-      setSettings(sData);
-      setActivityLogs(logsData);
-      setAdminPermissions(permissionsData);
+      // ⭐ FIXED: Use spread operators to create new array references
+      setProfiles([...pData]);
+      setMessages([...mData]);
+      setReports([...rData]);
+      setRequests([...reqData]);
+      setSettings([...sData]);
+      setActivityLogs([...logsData]);
+      setAdminPermissions([...permissionsData]);
     } catch (e: any) {
       console.error("Failed to load admin data", e);
       toast.error("Error loading administration data.");
@@ -208,10 +209,10 @@ export const Admin: React.FC = () => {
     
     window.addEventListener("classvault-db-update", handleDbUpdate);
     
-    // Auto-poll messages & reports every 15 seconds as a backup
+    // Auto-poll messages & reports every 10 seconds as a backup
     const interval = setInterval(() => {
       loadAdminData(true);
-    }, 15000);
+    }, 10000);
 
     return () => {
       window.removeEventListener("classvault-db-update", handleDbUpdate);
@@ -229,6 +230,9 @@ export const Admin: React.FC = () => {
       setSettings(prev => 
         prev.map(s => s.key === key ? { ...s, value: newValue, updated_at: new Date().toISOString() } : s)
       );
+      
+      // ⭐ Force refresh after toggle
+      await loadAdminData(true);
       
       toast.success(`Feature "${key.replace(/_/g, " ")}" updated successfully.`);
     } catch (e: any) {
@@ -255,7 +259,6 @@ export const Admin: React.FC = () => {
       await dbAPI.createAccount({
         username: newUsername.trim(),
         role: newRole,
-        // Only pass custom permissions if creating an admin or owner (and current user is Owner)
         permissions: (newRole === 'admin' || newRole === 'owner') && isOwner ? createPermissions : undefined
       });
       toast.success(`Account for "${newUsername.trim()}" pre-created successfully!`);
@@ -270,7 +273,8 @@ export const Admin: React.FC = () => {
         return initial;
       });
       
-      loadAdminData(true);
+      // ⭐ Force refresh after creating
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to create account.");
     } finally {
@@ -287,7 +291,7 @@ export const Admin: React.FC = () => {
     try {
       await dbAPI.removeAccount({ profileId });
       toast.success(`Student "${username}" has been soft-removed.`);
-      loadAdminData(true);
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to remove account.");
     }
@@ -296,10 +300,9 @@ export const Admin: React.FC = () => {
   // Restore Soft-Deleted Account (Owner Override feature)
   const handleRestoreAccount = async (username: string, role: AppRole) => {
     try {
-      // Re-create account resurrects it
       await dbAPI.createAccount({ username, role });
       toast.success(`Student account "${username}" restored successfully!`);
-      loadAdminData(true);
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to restore account.");
     }
@@ -310,7 +313,7 @@ export const Admin: React.FC = () => {
     try {
       await dbAPI.unsuspendAccount({ profileId });
       toast.success(`Suspension lifted for "${username}".`);
-      loadAdminData(true);
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to lift suspension.");
     }
@@ -328,6 +331,7 @@ export const Admin: React.FC = () => {
       toast.success(`Warning notice sent to "${selectedProfile.username}".`);
       setWarningOpen(false);
       setWarningMessage("");
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to send warning.");
     } finally {
@@ -335,7 +339,7 @@ export const Admin: React.FC = () => {
     }
   };
 
-  // Submit Suspension (Forces student into Read-Only Mode)
+  // Submit Suspension
   const handleSubmitSuspension = async () => {
     if (!selectedProfile) return;
     setIsSubmittingSuspension(true);
@@ -346,10 +350,10 @@ export const Admin: React.FC = () => {
         days: daysNum,
         reason: suspendReason.trim() || "Suspended by classroom administrator."
       });
-      toast.success(`Student "${selectedProfile.username}" suspended for ${daysNum} days (Read-Only Mode active).`);
+      toast.success(`Student "${selectedProfile.username}" suspended for ${daysNum} days.`);
       setSuspensionOpen(false);
       setSuspendReason("");
-      loadAdminData(true);
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to suspend account.");
     } finally {
@@ -369,7 +373,7 @@ export const Admin: React.FC = () => {
       toast.success(`Student renamed to "${renameUsername.trim()}".`);
       setRenameOpen(false);
       setRenameUsername("");
-      loadAdminData(true);
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to rename student.");
     } finally {
@@ -377,7 +381,7 @@ export const Admin: React.FC = () => {
     }
   };
 
-  // Submit Username Change Resolution (Approve/Reject)
+  // Submit Username Change Resolution
   const handleSubmitRequestResolution = async () => {
     if (!selectedRequest) return;
     setIsSubmittingRequestResolution(true);
@@ -395,7 +399,7 @@ export const Admin: React.FC = () => {
       );
       setSelectedRequest(null);
       setRequestNote("");
-      loadAdminData(true);
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to resolve request.");
     } finally {
@@ -403,11 +407,10 @@ export const Admin: React.FC = () => {
     }
   };
 
-  // Open Edit Permissions Dialog (Owner Only)
+  // Open Edit Permissions Dialog
   const handleOpenPermissions = (adminProf: Profile) => {
     setTargetAdminProfile(adminProf);
     
-    // Build initial permissions record
     const record: Record<string, boolean> = {};
     ALL_PERMISSION_KEYS.forEach(key => {
       const rule = adminPermissions.find(p => p.admin_id === adminProf.id && p.permission_key === key);
@@ -418,7 +421,6 @@ export const Admin: React.FC = () => {
     setPermissionsOpen(true);
   };
 
-  // Group permissions toggle (Select/Deselect all under a heading)
   const handleGroupToggle = (groupTitle: string, currentStatus: boolean) => {
     const group = PERMISSION_GROUPS.find(g => g.title === groupTitle);
     if (!group) return;
@@ -432,7 +434,6 @@ export const Admin: React.FC = () => {
     });
   };
 
-  // Individual permission checkbox toggle
   const handlePermissionCheckboxToggle = (key: PermissionKey) => {
     setEditedPermissions(prev => ({
       ...prev,
@@ -440,14 +441,12 @@ export const Admin: React.FC = () => {
     }));
   };
 
-  // Check if all permissions in a group are selected
   const isGroupFullyChecked = (groupTitle: string): boolean => {
     const group = PERMISSION_GROUPS.find(g => g.title === groupTitle);
     if (!group) return false;
     return group.keys.every(key => editedPermissions[key] === true);
   };
 
-  // Save admin permissions in mock DB
   const handleSavePermissions = async () => {
     if (!targetAdminProfile) return;
     setIsSavingPermissions(true);
@@ -458,7 +457,7 @@ export const Admin: React.FC = () => {
       });
       toast.success(`Permissions updated for administrator "${targetAdminProfile.username}".`);
       setPermissionsOpen(false);
-      loadAdminData(true);
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to save permissions.");
     } finally {
@@ -471,13 +470,13 @@ export const Admin: React.FC = () => {
     try {
       await dbAPI.resolveReport({ reportId });
       toast.success("Report marked as resolved.");
-      loadAdminData(true);
+      await loadAdminData(true);
     } catch (e: any) {
       toast.error(e.message || "Failed to resolve report.");
     }
   };
 
-  // Impersonate student or administrator (Owner only debugging tool)
+  // Impersonate student or administrator
   const handleImpersonation = async (targetId: string, username: string) => {
     try {
       await impersonateUser(targetId);
@@ -504,7 +503,7 @@ export const Admin: React.FC = () => {
   const showReportsTab = isOwner || hasLocalPermission("handle_reports");
   const showRequestsTab = isOwner || hasLocalPermission("approve_username_requests") || hasLocalPermission("reject_username_requests");
   const showSettingsTab = isOwner || hasLocalPermission("manage_feature_toggles");
-  const showLogsTab = isOwner; // Only Owners see audit logs
+  const showLogsTab = isOwner;
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto px-1 sm:px-4 py-2 select-none animate-in fade-in duration-200">
@@ -543,7 +542,6 @@ export const Admin: React.FC = () => {
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           
-          {/* TABS LIST */}
           <TabsList className="flex flex-wrap h-auto bg-muted p-1 rounded-md mb-6 w-full justify-start overflow-x-auto select-none gap-1">
             <TabsTrigger value="overview" className="flex items-center gap-1.5 py-2">
               <Shield className="h-4 w-4" /> Overview
@@ -635,7 +633,7 @@ export const Admin: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Quick Account Creation Form (Obeys hasLocalPermission) */}
+              {/* Quick Account Creation Form */}
               {(isOwner || hasLocalPermission("create_students")) && (
                 <div className="glass rounded-xl p-5 border border-border/50 space-y-4">
                   <h3 className="text-sm font-bold text-foreground border-b border-border/40 pb-2 flex items-center gap-1.5">
@@ -674,7 +672,6 @@ export const Admin: React.FC = () => {
                           Student Directory
                         </label>
 
-                        {/* Admins can only create Admins if allowed by Owner */}
                         {(isOwner || hasLocalPermission("create_admins")) && (
                           <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer">
                             <input
@@ -689,7 +686,6 @@ export const Admin: React.FC = () => {
                           </label>
                         )}
 
-                        {/* Super Owner can create Owners */}
                         {isSuperOwner && (
                           <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer">
                             <input
@@ -700,13 +696,12 @@ export const Admin: React.FC = () => {
                               onChange={() => setNewRole("owner")}
                               className="text-primary focus:ring-primary h-4 w-4 bg-transparent border-border"
                             />
-                            Owner ( Sarah Level )
+                            Owner
                           </label>
                         )}
                       </div>
                     </div>
 
-                    {/* Collapsible Granular Permissions Checklist on Creation (Owner/Super Owner Only) */}
                     {(newRole === 'admin' || newRole === 'owner') && isOwner && (
                       <div className="space-y-3 pt-2 border-t border-border/40">
                         <div className="flex items-center justify-between">
@@ -722,7 +717,6 @@ export const Admin: React.FC = () => {
                             
                             return (
                               <div key={group.title} className="space-y-1.5 border-b border-border/20 last:border-0 pb-2 last:pb-0">
-                                {/* Group Header Toggle */}
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -744,7 +738,6 @@ export const Admin: React.FC = () => {
                                   {group.title}
                                 </button>
 
-                                {/* Sub-permissions checkboxes */}
                                 <div className="grid grid-cols-2 gap-2 pl-4 pt-0.5">
                                   {group.keys.map((key) => {
                                     const isChecked = createPermissions[key] === true;
@@ -829,7 +822,6 @@ export const Admin: React.FC = () => {
           {showAccountsTab && (
             <TabsContent value="accounts" className="focus-visible:ring-0 space-y-4">
               
-              {/* Pre-create Inline Banner Form */}
               {(isOwner || hasLocalPermission("create_students")) && (
                 <div className="glass rounded-xl p-4 border border-border/50 flex flex-col md:flex-row items-end gap-4">
                   <div className="flex-1 space-y-1 w-full">
@@ -860,7 +852,6 @@ export const Admin: React.FC = () => {
                 </div>
               )}
 
-              {/* Accounts Table */}
               <div className="glass rounded-xl border border-border/50 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
@@ -879,11 +870,7 @@ export const Admin: React.FC = () => {
                         const isSuspended = p.status === "suspended";
                         const isRemoved = p.status === "removed";
                         
-                        // Silent Governance: Don't show Owner/Super Owners to standard admins
                         const showImpersonate = isOwner && p.pending_role !== 'owner' && p.pending_role !== 'super_owner' && p.status !== 'removed';
-                        
-                        // Super Owner can manage permissions of Owners and Admins.
-                        // Owners can manage permissions of Admins.
                         const showEditPermissions = (isSuperOwner && (p.pending_role === 'owner' || p.pending_role === 'admin')) ||
                                                      (isOwner && !isSuperOwner && p.pending_role === 'admin');
                         const showRestore = isOwner && isRemoved;
@@ -920,7 +907,6 @@ export const Admin: React.FC = () => {
                               )}
                             </td>
                             <td className="p-3 text-right space-x-1 sm:space-x-1.5">
-                              {/* Soft delete restore button (Owner only override) */}
                               {showRestore && (
                                 <Button
                                   variant="outline"
@@ -934,7 +920,6 @@ export const Admin: React.FC = () => {
 
                               {!isRemoved && (
                                 <>
-                                  {/* Impersonate User button (Owner debug tool) */}
                                   {showImpersonate && (
                                     <Button
                                       variant="ghost"
@@ -947,7 +932,6 @@ export const Admin: React.FC = () => {
                                     </Button>
                                   )}
 
-                                  {/* Edit Permissions button (Owner managing Admin) */}
                                   {showEditPermissions && (
                                     <Button
                                       variant="ghost"
@@ -960,7 +944,6 @@ export const Admin: React.FC = () => {
                                     </Button>
                                   )}
 
-                                  {/* Warn Student */}
                                   {(isOwner || hasLocalPermission("send_warnings")) && (
                                     <Button
                                       variant="ghost"
@@ -976,7 +959,6 @@ export const Admin: React.FC = () => {
                                     </Button>
                                   )}
 
-                                  {/* Suspend / Unsuspend */}
                                   {isSuspended ? (
                                     (isOwner || hasLocalPermission("unsuspend_students")) && (
                                       <Button
@@ -1006,7 +988,6 @@ export const Admin: React.FC = () => {
                                     )
                                   )}
 
-                                  {/* Rename */}
                                   {(isOwner || hasLocalPermission("edit_students")) && (
                                     <Button
                                       variant="ghost"
@@ -1022,7 +1003,6 @@ export const Admin: React.FC = () => {
                                     </Button>
                                   )}
 
-                                  {/* Soft Remove (Can be undone by Owner) */}
                                   {(isOwner || hasLocalPermission("remove_students")) && (
                                     <Button
                                       variant="ghost"
@@ -1281,7 +1261,7 @@ export const Admin: React.FC = () => {
             </TabsContent>
           )}
 
-          {/* 6. SETTINGS & LOCKS TAB */}
+          {/* 6. SETTINGS TAB */}
           {showSettingsTab && (
             <TabsContent value="settings" className="focus-visible:ring-0">
               <div className="glass rounded-xl border border-border/50 p-5 space-y-6">
@@ -1296,7 +1276,6 @@ export const Admin: React.FC = () => {
 
                 <div className="space-y-5 divide-y divide-border/40 pt-1">
                   
-                  {/* Emergency Lock Toggle (Owner Override Only) */}
                   {isOwner && (
                     <div className="flex items-start justify-between gap-4 pt-4 first:pt-0">
                       <div className="space-y-1">
@@ -1305,7 +1284,7 @@ export const Admin: React.FC = () => {
                           <Badge variant="destructive" className="animate-pulse font-mono text-[9px] py-0 px-1">SECURITY LOCK</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground max-w-lg leading-relaxed">
-                          Engages a full classroom-wide lock. All students are immediately put in Read-Only Mode. They can read broadcasts, DMs, and download files, but are blocked from creating any new content.
+                          Engages a full classroom-wide lock. All students are immediately put in Read-Only Mode.
                         </p>
                       </div>
                       <Switch
@@ -1315,12 +1294,11 @@ export const Admin: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Broadcast Toggle */}
                   <div className="flex items-start justify-between gap-4 pt-4">
                     <div className="space-y-1">
                       <p className="font-semibold text-sm text-foreground">Classroom Broadcast Feed</p>
                       <p className="text-xs text-muted-foreground max-w-lg leading-relaxed">
-                        Enable or disable the class broadcast stream. When disabled, the main classroom board is locked and students cannot post new broadcasts or replies.
+                        Enable or disable the class broadcast stream.
                       </p>
                     </div>
                     <Switch
@@ -1329,12 +1307,11 @@ export const Admin: React.FC = () => {
                     />
                   </div>
 
-                  {/* P2P DM Toggle */}
                   <div className="flex items-start justify-between gap-4 pt-4">
                     <div className="space-y-1">
                       <p className="font-semibold text-sm text-foreground">Private Peer-to-Peer DMs</p>
                       <p className="text-xs text-muted-foreground max-w-lg leading-relaxed">
-                        Enable or disable private messaging. When disabled, students cannot send DMs to their classmates, but can still review past conversations.
+                        Enable or disable private messaging.
                       </p>
                     </div>
                     <Switch
@@ -1343,12 +1320,11 @@ export const Admin: React.FC = () => {
                     />
                   </div>
 
-                  {/* File Upload Toggle */}
                   <div className="flex items-start justify-between gap-4 pt-4">
                     <div className="space-y-1">
                       <p className="font-semibold text-sm text-foreground">File Attachment Uploads</p>
                       <p className="text-xs text-muted-foreground max-w-lg leading-relaxed">
-                        Enable or disable attaching resource files (PDF, JPG, PNG, DOCX, etc.) up to 400 MB. When disabled, the paperclip icon is locked.
+                        Enable or disable attaching resource files.
                       </p>
                     </div>
                     <Switch
@@ -1361,7 +1337,7 @@ export const Admin: React.FC = () => {
             </TabsContent>
           )}
 
-          {/* 7. AUDIT LOGS TAB (Owner Only) */}
+          {/* 7. AUDIT LOGS TAB */}
           {showLogsTab && (
             <TabsContent value="logs" className="focus-visible:ring-0 space-y-4">
               <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-1 flex items-center gap-1">
@@ -1423,7 +1399,7 @@ export const Admin: React.FC = () => {
               <AlertCircle className="h-5 w-5" /> Send Account Warning
             </DialogTitle>
             <DialogDescription>
-              Write a warning message to <strong>{selectedProfile?.username}</strong>. They will be forced to acknowledge it upon entering their inbox.
+              Write a warning message to <strong>{selectedProfile?.username}</strong>.
             </DialogDescription>
           </DialogHeader>
 
@@ -1432,7 +1408,7 @@ export const Admin: React.FC = () => {
               rows={4}
               value={warningMessage}
               onChange={(e) => setWarningMessage(e.target.value)}
-              placeholder="e.g. Please keep discussion respectful. Continued inappropriate behavior will result in account suspension."
+              placeholder="e.g. Please keep discussion respectful."
               required
               className="w-full text-sm rounded-md border border-border bg-input px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
@@ -1575,7 +1551,7 @@ export const Admin: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* EDIT ADMIN PERMISSIONS DIALOG (OWNER ONLY) */}
+      {/* EDIT ADMIN PERMISSIONS DIALOG */}
       <Dialog open={permissionsOpen} onOpenChange={setPermissionsOpen}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1594,7 +1570,6 @@ export const Admin: React.FC = () => {
               return (
                 <div key={group.title} className="p-3 rounded-lg border border-border/60 bg-muted/20 space-y-2.5">
                   
-                  {/* Group Header Checkbox */}
                   <button
                     type="button"
                     onClick={() => handleGroupToggle(group.title, fullyChecked)}
@@ -1608,7 +1583,6 @@ export const Admin: React.FC = () => {
                     {group.title}
                   </button>
 
-                  {/* Sub-permissions List */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6 pt-1">
                     {group.keys.map((key) => {
                       const isChecked = editedPermissions[key] === true;
