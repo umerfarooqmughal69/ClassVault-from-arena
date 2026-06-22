@@ -53,7 +53,6 @@ export const Login: React.FC = () => {
         password 
       });
       toast.success("Welcome back to ClassVault!");
-      // Redirect or let App state handle redirect
       window.location.hash = "#/feed";
     } catch (err: any) {
       toast.error(err.message || "Invalid credentials.");
@@ -62,7 +61,7 @@ export const Login: React.FC = () => {
     }
   };
 
-  // Handle Claim Account
+  // ⭐ FIXED: Handle Claim Account with cache-busting
   const handleClaim = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!claimUsername.trim() || !claimPassword || !claimPasswordConfirm) {
@@ -77,6 +76,9 @@ export const Login: React.FC = () => {
 
     setIsLoading(true);
     try {
+      // ⭐ Force refresh profiles before claiming
+      await dbAPI.getAdminProfiles();
+      
       await dbAPI.claimAccount({
         username: claimUsername.trim(),
         password: claimPassword,
@@ -116,7 +118,6 @@ export const Login: React.FC = () => {
       });
       toast.success("Administrator account created! Logging you in...");
       
-      // Auto login after bootstrap
       await dbAPI.signInWithPassword({
         username: bootUsername.trim(),
         password: bootPassword
