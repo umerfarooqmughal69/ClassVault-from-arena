@@ -1010,8 +1010,8 @@ export const dbAPI = {
 
     return session;
   },
-
-  // 4. Claim Account (Student/Admin claims their username)
+  
+  // ⭐ FIXED: Claim Account with better matching
   async claimAccount({ username, password }: any): Promise<{ success: boolean; message: string }> {
     if (!isValidUsername(username)) {
       throw new Error("Invalid username.");
@@ -1022,19 +1022,40 @@ export const dbAPI = {
 
     const normalizedInput = username.trim().toLowerCase().normalize("NFC");
     const profiles = localDB.getProfiles();
-    const profile = profiles.find(p => p.username.trim().toLowerCase().normalize("NFC") === normalizedInput);
+    
+    // ⭐ Try multiple matching strategies
+    let profile = profiles.find(p => p.username.trim().toLowerCase().normalize("NFC") === normalizedInput);
+    
+    // If not found, try case-insensitive match without full normalization
+    if (!profile) {
+      profile = profiles.find(p => p.username.toLowerCase() === username.toLowerCase().trim());
+    }
+    
+    // If still not found, try direct match
+    if (!profile) {
+      profile = profiles.find(p => p.username === username.trim());
+    }
 
     if (!profile) {
       console.warn("Claim failed. Input username:", username, "Normalized:", normalizedInput, "Available profiles in DB:", profiles.map(p => p.username));
       throw new Error("This username was not pre-created by the admin. Please contact your classroom admin.");
     }
 
+    // ⭐ Check if already claimed
     if (profile.password_set) {
       throw new Error("This account has already been claimed. Please sign in.");
     }
 
     if (profile.status === 'removed') {
       throw new Error("This account has been removed by the administrator.");
+    }
+
+    // ⭐ Check if suspended
+    if (profile.status === 'suspended') {
+      const until = profile.suspended_until ? new Date(profile.suspended_until) : null;
+      if (until && until > new Date()) {
+        throw new Error(`Account is suspended until ${until.toLocaleString()}. Cannot claim.`);
+      }
     }
 
     const userId = "u-" + profile.username + "-" + generateUUID();
@@ -1058,9 +1079,14 @@ export const dbAPI = {
     passwords[usernameToEmail(username)] = password;
     localStorage.setItem("classvault_passwords", JSON.stringify(passwords));
 
+    // ⭐ Trigger global update event
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("classvault-db-update"));
+    }
+
     return { success: true, message: "Account claimed successfully! You can now log in." };
   },
-
+  
   // 5. Sign Out
   async signOut(): Promise<void> {
     activeSession = null;
