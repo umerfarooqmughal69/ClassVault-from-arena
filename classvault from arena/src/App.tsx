@@ -50,7 +50,7 @@ const BlockedScreen: React.FC<BlockedScreenProps> = ({ title, description, onSig
   );
 };
 
-// --- Main App Content (inside Auth Provider) ---
+// --- Main App Content ---
 const AppContent: React.FC = () => {
   const { 
     session, 
@@ -72,7 +72,6 @@ const AppContent: React.FC = () => {
     };
     
     window.addEventListener("hashchange", handleHashChange);
-    // If no hash, set default
     if (!window.location.hash) {
       window.location.hash = "#/";
     }
@@ -80,16 +79,14 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  // Poll for warnings (especially unread ones) and profile updates
+  // ⭐ FIXED: Poll for warnings and profile updates
   useEffect(() => {
     if (!session) return;
 
     const checkStatusAndWarnings = async () => {
       try {
-        // Refresh profile state (to catch suspensions/renames in real-time)
         await refreshProfile();
         
-        // Get unread warnings count
         const warnings = await dbAPI.getWarnings();
         const unread = warnings.filter(w => !w.read).length;
         setUnreadWarningsCount(unread);
@@ -100,14 +97,15 @@ const AppContent: React.FC = () => {
 
     checkStatusAndWarnings();
     
+    // ⭐ Listen for database updates
     const handleDbUpdate = () => {
       checkStatusAndWarnings();
     };
     
     window.addEventListener("classvault-db-update", handleDbUpdate);
     
-    // Poll every 15s so suspensions/warnings apply instantly as backup
-    const interval = setInterval(checkStatusAndWarnings, 15000);
+    // Poll every 10s
+    const interval = setInterval(checkStatusAndWarnings, 10000);
     return () => {
       window.removeEventListener("classvault-db-update", handleDbUpdate);
       clearInterval(interval);
@@ -154,9 +152,6 @@ const AppContent: React.FC = () => {
       />
     );
   }
-
-  // Suspended students are placed in Read-Only Mode rather than being fully hard-blocked.
-  // The block is handled inside database mutations and visually using a top banner.
 
   // Helper to determine active nav item
   const isActive = (hash: string) => {
@@ -297,88 +292,8 @@ const AppContent: React.FC = () => {
               <span className="hidden md:inline">Settings</span>
             </a>
 
-            {/* Admin Dashboard Link (Conditional) */}
+            {/* Admin Dashboard Link */}
             {isAdmin && (
               <a 
                 href="#/admin"
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs sm:text-sm font-semibold transition-all ${
-                  isActive("#/admin")
-                    ? "bg-accent/15 text-accent border border-accent/30" 
-                    : "text-accent/80 hover:text-accent hover:bg-accent/10 border border-transparent"
-                }`}
-              >
-                <Shield className="h-4 w-4 shrink-0" />
-                <span>Admin</span>
-              </a>
-            )}
-          </nav>
-
-          {/* Right Side User Badge & Logout */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto sm:ml-0">
-            
-            {/* Privacy Status Pill */}
-            <a 
-              href="#/settings" 
-              className="hidden md:flex items-center"
-              title="Click to toggle in Settings"
-            >
-              {profile.anonymous ? (
-                <Badge variant="accent" className="flex items-center gap-1 text-[10px] cursor-pointer hover:bg-accent/35 transition-colors">
-                  <EyeOff className="h-3 w-3" /> Anonymous Mode
-                </Badge>
-              ) : (
-                <Badge variant="primary" className="flex items-center gap-1 text-[10px] cursor-pointer hover:bg-primary/35 transition-colors">
-                  <Eye className="h-3 w-3" /> Public Identity
-                </Badge>
-              )}
-            </a>
-
-            {/* User details */}
-            <div className="hidden sm:flex flex-col text-right">
-              <span className="text-xs font-semibold text-foreground truncate max-w-[100px]">
-                {profile.username}
-              </span>
-              <span className="text-[9px] text-muted-foreground uppercase tracking-wider">
-                {profile.pending_role}
-              </span>
-            </div>
-
-            {/* Logout button */}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={signOut}
-              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
-              title="Sign Out"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
-
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 md:p-8">
-        <div className="animate-in fade-in duration-200">
-          {renderActiveView()}
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="py-4 border-t border-border/20 text-center text-[10px] text-muted-foreground">
-        <p>© {new Date().getFullYear()} ClassVault. Secured and encrypted classroom environment.</p>
-      </footer>
-    </div>
-  );
-};
-
-// --- App Shell wrapper with Auth & Toast providers ---
-export default function App() {
-  return (
-    <AuthProvider>
-      <Toaster position="top-right" richColors theme="dark" closeButton />
-      <AppContent />
-    </AuthProvider>
-  );
-}
+                className={`flex
